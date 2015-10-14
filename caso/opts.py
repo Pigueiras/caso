@@ -19,7 +19,6 @@ import itertools
 import caso.extract.base
 import caso.extract.manager
 import caso.manager
-import caso.messenger
 import caso.messenger.logstash
 import caso.messenger.ssm
 
@@ -29,8 +28,7 @@ def list_opts():
         ('DEFAULT', itertools.chain(caso.manager.opts,
                                     caso.manager.cli_opts,
                                     caso.extract.manager.opts,
-                                    caso.extract.manager.cli_opts,
-                                    caso.messenger.opts)
+                                    caso.extract.manager.cli_opts)
          ),
         ('logstash', caso.messenger.logstash.opts),
         ('ssm', caso.messenger.ssm.opts),

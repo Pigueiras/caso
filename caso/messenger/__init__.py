@@ -22,15 +22,7 @@ import six
 
 from caso import loadables
 
-opts = [
-    cfg.ListOpt('messengers',
-                default=['caso.messenger.noop.NoopMessenger'],
-                help='List of messenger that will dispatch records.'),
-]
-
 CONF = cfg.CONF
-
-CONF.register_opts(opts)
 
 LOG = log.getLogger(__name__)
 
@@ -45,13 +37,23 @@ class BaseMessenger(object):
 class Manager(loadables.BaseLoader):
     def __init__(self):
         super(Manager, self).__init__(BaseMessenger)
+        self.messengers = None
+
+    def _load_messengers(self):
         self.messengers = [i()
                            for i in self.get_matching_classes(CONF.messengers)]
 
     def push_to_all(self, records):
+        if self.messengers is None:
+            self._load_messengers()
+
         for m in self.messengers:
             try:
                 m.push(records)
             except Exception as e:
                 # Capture exception so that we can continue working
                 LOG.error(e)
+
+
+def all_managers():
+    return Manager().get_all_classes()

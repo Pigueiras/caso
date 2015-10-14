@@ -26,6 +26,12 @@ import caso.messenger
 from caso import utils
 
 opts = [
+    cfg.ListOpt('messengers',
+                default=['caso.messenger.noop.NoopMessenger'],
+                help='List of messenger that will dispatch records. '
+                'valid values are %s' %
+                ["%s.%s" % (i.__module__, i.__name__)
+                 for i in caso.messenger.all_managers()]),
     cfg.StrOpt('spooldir',
                default='/var/spool/caso',
                help='Spool directory.'),
