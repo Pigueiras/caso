@@ -5,7 +5,8 @@
 #
 
 # List of messenger that will dispatch records. valid values are
-# ['caso.messenger.ssm.SsmMessager', 'caso.messenger.noop.NoopMessenger',
+# ['caso.messenger.ssm.SSMMessengerV02', 'caso.messenger.ssm.SsmMessager',
+# 'caso.messenger.noop.NoopMessenger',
 # 'caso.messenger.logstash.LogstashMessenger'] (list value)
 #messengers = caso.messenger.noop.NoopMessenger
 
