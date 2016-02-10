@@ -17,6 +17,7 @@
 import json
 import pprint
 
+import caso
 from caso import exception
 
 
@@ -27,7 +28,8 @@ class CloudRecord(object):
     """
 
     # Version 0.2: initial version
-    version = "0.2"
+    # Version 0.4: Add 0.4 fields
+    version = "0.4"
 
     _v02_fields = [
         "VMUUID",
@@ -51,11 +53,19 @@ class CloudRecord(object):
         "Disk",
         "StorageRecordId",
         "ImageId",
-        "CloudType"
+        "CloudType",
+    ]
+
+    _v04_fields = _v02_fields + [
+        "CloudComputeService",
+        "BenchmarkType",
+        "Benchmark",
+        "PublicIPCount",
     ]
 
     _version_field_map = {
         "0.2": _v02_fields,
+        "0.4": _v04_fields,
     }
 
     def __init__(self, uuid, site, name, user_id, group_id, fqan,
@@ -64,10 +74,14 @@ class CloudRecord(object):
                  suspend_duration=None, wall_duration=None, cpu_duration=None,
                  network_type=None, network_in=None, network_out=None,
                  cpu_count=None, memory=None, disk=None,
-                 image_id=None, cloud_type=None,
+                 image_id=None, cloud_type=caso.user_agent,
                  storage_record_id=None,
                  vo=None, vo_group=None, vo_role=None,
-                 user_dn=None):
+                 user_dn=None,
+                 compute_service=None,
+                 benchmark_value=None, benchmark_type=None,
+                 public_ip_count=None):
+
         self.uuid = uuid
         self.site = site
         self.name = name
@@ -90,6 +104,10 @@ class CloudRecord(object):
         self.cloud_type = cloud_type
         self.storage_record_id = storage_record_id
         self.user_dn = user_dn
+        self.compute_service = compute_service
+        self.benchmark_value = benchmark_value
+        self.benchmark_type = benchmark_type
+        self.public_ip_count = public_ip_count
 
     def __repr__(self):
         return pprint.pformat(self.as_dict())
@@ -134,7 +152,12 @@ class CloudRecord(object):
              'StorageRecordId': self.storage_record_id,
              'ImageId': self.image_id,
              'CloudType': self.cloud_type,
-             'GlobalUserName': self.user_dn, }
+             'GlobalUserName': self.user_dn,
+             'PublicIPCount': self.public_ip_count,
+             'Benchmark': self.benchmark_value,
+             'BenchmarkType': self.benchmark_type,
+             'CloudComputeService': self.compute_service,
+             }
         return d
 
     def as_json(self, version=None):

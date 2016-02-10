@@ -105,7 +105,6 @@ class OpenStackExtractor(base.BaseExtractor):
                                    server.user_id,
                                    server.tenant_id,
                                    vo,
-                                   cloud_type="OpenStack",
                                    status=status,
                                    image_id=image_id,
                                    user_dn=users.get(server.user_id, None))

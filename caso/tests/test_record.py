@@ -18,6 +18,7 @@ Tests for `caso.record` module.
 
 import uuid
 
+import caso
 from caso import exception
 from caso import record
 from caso.tests import base
@@ -38,14 +39,13 @@ class TestCasoManager(base.TestCase):
         self.assertRaises(exception.RecordVersionNotFound,
                           r.as_json, version="0.0")
 
-    def test_v02(self):
+    def test_required_fields(self):
         server_id = uuid.uuid4().hex
         site_name = "site-foo"
         server_name = "name-foo"
         server_user_id = uuid.uuid4().hex
         server_tenant_id = uuid.uuid4().hex
         fqan = "FooVO"
-        cloud_type = "foobar"
         status = 'completed'
         image_id = uuid.uuid4().hex
         user_dn = "/Foo/bar/baz"
@@ -60,7 +60,10 @@ class TestCasoManager(base.TestCase):
             'SiteName': site_name,
             'Status': status,
             'VMUUID': server_id,
-            'CloudType': cloud_type,
+            'CloudType': caso.user_agent,
+        }
+
+        expected_02 = {
             'CpuCount': None,
             'CpuDuration': None,
             'Disk': None,
@@ -72,7 +75,14 @@ class TestCasoManager(base.TestCase):
             'StartTime': None,
             'StorageRecordId': None,
             'SuspendDuration': None,
-            'WallDuration': None
+            'WallDuration': None,
+        }
+
+        expected_04 = {
+            'CloudComputeService': None,
+            'BenchmarkType': None,
+            'Benchmark': None,
+            'PublicIPCount': None,
         }
 
         r = record.CloudRecord(server_id,
@@ -81,10 +91,14 @@ class TestCasoManager(base.TestCase):
                                server_user_id,
                                server_tenant_id,
                                fqan,
-                               cloud_type=cloud_type,
                                status=status,
                                image_id=image_id,
                                user_dn=user_dn)
 
-        self.maxDiff = None
-        self.assertDictEqual(expected, r.as_dict())
+        d_02 = r.as_dict(version="0.2")
+        self.assertDictContainsSubset(expected, d_02)
+        self.assertDictContainsSubset(expected_02, d_02)
+
+        d_04 = r.as_dict(version="0.4")
+        self.assertDictContainsSubset(expected, d_04)
+        self.assertDictContainsSubset(expected_04, d_04)
