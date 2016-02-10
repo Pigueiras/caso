@@ -14,9 +14,12 @@
 # License for the specific language governing permissions and limitations
 # under the License.
 
+import abc
+
 import dirq.QueueSimple
 from oslo_config import cfg
 from oslo_log import log
+import six
 
 import caso.messenger
 from caso import utils
@@ -34,13 +37,15 @@ CONF = cfg.CONF
 CONF.register_opts(opts, group="ssm")
 
 
-class SSMMessengerV02(caso.messenger.BaseMessenger):
-    header = "APEL-cloud-message: v0.2"
+@six.add_metaclass(abc.ABCMeta)
+class SSMBaseMessenger(caso.messenger.BaseMessenger):
+    version = None
     separator = "%%"
 
     def __init__(self):
         # FIXME(aloga): try except here
         utils.makedirs(CONF.ssm.output_path)
+        self.header = "APEL-cloud-message: v%s" % self.version
 
     def push(self, records):
         if not records:
@@ -49,7 +54,7 @@ class SSMMessengerV02(caso.messenger.BaseMessenger):
         entries = []
         for _, record in records.iteritems():
             aux = ""
-            for k, v in record.as_dict().iteritems():
+            for k, v in record.as_dict(version=self.version).iteritems():
                 if v is not None:
                     aux += "%s: %s\n" % (k, v)
             entries.append(aux)
@@ -62,6 +67,10 @@ class SSMMessengerV02(caso.messenger.BaseMessenger):
         # FIXME(aloga): try except here
         queue = dirq.QueueSimple.QueueSimple(CONF.ssm.output_path)
         queue.add(message)
+
+
+class SSMMessengerV02(SSMBaseMessenger):
+    version = "0.2"
 
 
 class SsmMessager(SSMMessengerV02):
