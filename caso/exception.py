@@ -43,6 +43,10 @@ class CasoException(Exception):
         super(CasoException, self).__init__(message)
 
 
+class RecordVersionNotFound(CasoException):
+    msg_fmt = "Version %(version)s of accounting record could not be found."
+
+
 class ClassNotFound(CasoException):
     msg_fmt = "Class %(class_name)s could not be found: %(exception)s."
 

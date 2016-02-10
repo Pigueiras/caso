@@ -20,6 +20,7 @@ from oslo_config import cfg
 from oslo_log import log
 import six
 
+from caso import exception
 from caso import loadables
 
 CONF = cfg.CONF
@@ -50,6 +51,11 @@ class Manager(loadables.BaseLoader):
         for m in self.messengers:
             try:
                 m.push(records)
+            except exception.RecordVersionNotFound:
+                # Oops, a messenger is using a weird version, stop working
+                LOG.error("Messenger '%s' is using an unknown "
+                          "record version" % m.__class__.__name__)
+                raise
             except Exception as e:
                 # Capture exception so that we can continue working
                 LOG.error(e)

@@ -29,9 +29,9 @@
 #extract_from = <None>
 
 # Which extractor to use for getting the data. Only the following middlewares
-# are supported: dict_keys(['nova', 'ceilometer']). If you do not specify
+# are supported: dict_keys(['ceilometer', 'nova']). If you do not specify
 # anything, nova will be used. (string value)
-# Allowed values: nova, ceilometer
+# Allowed values: ceilometer, nova
 #extractor = nova
 
 #

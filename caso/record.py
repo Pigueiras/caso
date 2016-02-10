@@ -17,8 +17,47 @@
 import json
 import pprint
 
+from caso import exception
+
 
 class CloudRecord(object):
+    """The CloudRecord class holds information for each of the records.
+
+    This class is versioned, following the Cloud Accounting Record versions.
+    """
+
+    # Version 0.2: initial version
+    version = "0.2"
+
+    _v02_fields = [
+        "VMUUID",
+        "SiteName",
+        "MachineName",
+        "LocalUserId",
+        "LocalGroupId",
+        "GlobalUserName",
+        "FQAN",
+        "Status",
+        "StartTime",
+        "EndTime",
+        "SuspendDuration",
+        "WallDuration",
+        "CpuDuration",
+        "CpuCount",
+        "NetworkType",
+        "NetworkInbound",
+        "NetworkOutbound",
+        "Memory",
+        "Disk",
+        "StorageRecordId",
+        "ImageId",
+        "CloudType"
+    ]
+
+    _version_field_map = {
+        "0.2": _v02_fields,
+    }
+
     def __init__(self, uuid, site, name, user_id, group_id, fqan,
                  status=None,
                  start_time=None, end_time=None,
@@ -55,7 +94,25 @@ class CloudRecord(object):
     def __repr__(self):
         return pprint.pformat(self.as_dict())
 
-    def as_dict(self):
+    def as_dict(self, version=None):
+        """Return CloudRecord as a dictionary.
+
+        :param str version: optional, if passed it will format the record
+                            acording to that account record version
+
+        :returns: A dict containing the record.
+        """
+        if version is None:
+            version = self.version
+
+        if version not in self._version_field_map:
+            raise exception.RecordVersionNotFound(version=version)
+
+        return {k: v for k, v in self.map.items()
+                if k in self._version_field_map[version]}
+
+    @property
+    def map(self):
         d = {'VMUUID': self.uuid,
              'SiteName': self.site,
              'MachineName': self.name,
@@ -80,5 +137,5 @@ class CloudRecord(object):
              'GlobalUserName': self.user_dn, }
         return d
 
-    def as_json(self):
-        return json.dumps(self.as_dict())
+    def as_json(self, version=None):
+        return json.dumps(self.as_dict(version=version))
