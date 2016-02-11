@@ -27,6 +27,7 @@ from caso import record
 
 CONF = cfg.CONF
 CONF.import_opt("site_name", "caso.extract.manager")
+CONF.import_opt("service_name", "caso.extract.manager")
 CONF.import_opt("user", "caso.extract.base", "extractor")
 CONF.import_opt("password", "caso.extract.base", "extractor")
 CONF.import_opt("endpoint", "caso.extract.base", "extractor")
@@ -105,6 +106,7 @@ class OpenStackExtractor(base.BaseExtractor):
                                    server.user_id,
                                    server.tenant_id,
                                    vo,
+                                   compute_service=CONF.service_name,
                                    status=status,
                                    image_id=image_id,
                                    user_dn=users.get(server.user_id, None))

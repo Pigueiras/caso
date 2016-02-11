@@ -29,6 +29,9 @@ SUPPORTED_EXTRACTORS = {
 opts = [
     cfg.StrOpt('site_name',
                help='Site name as in GOCDB.'),
+    cfg.StrOpt('service_name',
+               default='$site_name',
+               help='Service name within the site'),
     cfg.ListOpt('tenants',
                 default=[],
                 help='List of tenants to extract accounting records from.'),
