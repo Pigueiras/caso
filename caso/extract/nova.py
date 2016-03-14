@@ -25,6 +25,10 @@ from oslo_config import cfg
 from caso.extract import base
 from caso import record
 
+from keystoneauth1.identity import v3
+from keystoneauth1 import session
+from novaclient import client
+
 CONF = cfg.CONF
 CONF.import_opt("site_name", "caso.extract.manager")
 CONF.import_opt("user", "caso.extract.base", "extractor")
@@ -35,16 +39,18 @@ CONF.import_opt("insecure", "caso.extract.base", "extractor")
 
 class OpenStackExtractor(base.BaseExtractor):
     def _get_conn(self, tenant):
+        auth = v3.Password(auth_url=CONF.extractor.endpoint,
+                           user_id=CONF.extractor.user,
+                           password=CONF.extractor.password,
+                           project_name=tenant,
+                           project_domain_id='default')
+        sess = session.Session(auth=auth)
+
         client = novaclient.client.Client
         conn = client(
             2,
-            CONF.extractor.user,
-            CONF.extractor.password,
-            tenant,
-            CONF.extractor.endpoint,
-            insecure=CONF.extractor.insecure,
-            service_type="compute")
-        conn.authenticate()
+            session=sess,
+            insecure=CONF.extractor.insecure)
         return conn
 
     def extract_for_tenant(self, tenant, lastrun):
