@@ -24,6 +24,7 @@ import six
 SUPPORTED_EXTRACTORS = {
     'nova': 'caso.extract.nova.OpenStackExtractor',
     'ceilometer': 'caso.extract.ceilometer.CeilometerExtractor',
+    'cern.nova': 'caso.extract.cern.nova.NovaExtractor',
 }
 
 opts = [
