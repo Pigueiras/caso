@@ -13,7 +13,7 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 # License for the specific language governing permissions and limitations
 # under the License.
-
+import datetime
 import dateutil.parser
 from dateutil import tz
 from oslo_config import cfg
@@ -36,6 +36,9 @@ opts = [
 ]
 
 cli_opts = [
+    cfg.StrOpt('extract_to',
+               help='Extract records until this date. If it is not set, '
+               'we use now'),
     cfg.StrOpt('extract_from',
                help='Extract records from this date. If it is not set, '
                'extract records from last run. If none are set, extract '
@@ -65,21 +68,24 @@ class Manager(object):
         self.extractor = extractor_class()
         self.records = None
 
-    def _extract(self, extract_from):
+    def _extract(self, extract_from, extract_to):
         self.records = {}
         for tenant in CONF.tenants:
             try:
                 records = self.extractor.extract_for_tenant(tenant,
-                                                            extract_from)
+                                                            extract_from,
+                                                            extract_to)
             except Exception:
                 records = []
                 LOG.exception("Cannot extrat records for '%s'" % tenant)
             else:
                 LOG.info("Extracted %d records for tenant '%s' from "
-                         "%s to now" % (len(records), tenant, extract_from))
+                         "%s to %s" % (len(records), tenant, extract_from,
+                         extract_to))
             self.records.update(records)
 
-    def get_records(self, lastrun="1970-01-01"):
+    def get_records(self, lastrun="1970-01-01",
+                    now=datetime.datetime.utcnow()):
         """Get records from given date
 
         :param lastrun: date to get records from (optional).
@@ -88,12 +94,17 @@ class Manager(object):
         lastrun parameter.
         """
         extract_from = CONF.extract_from or lastrun
+        extract_to = CONF.extract_to or now
 
         if isinstance(extract_from, six.string_types):
             extract_from = dateutil.parser.parse(extract_from)
+        if isinstance(extract_to, six.string_types):
+            extract_to = dateutil.parser.parse(extract_to)
 
         if extract_from.tzinfo is None:
             extract_from.replace(tzinfo=tz.tzutc())
+        if extract_to.tzinfo is None:
+            extract_to.replace(tzinfo=tz.tzutc())
         if self.records is None:
-            self._extract(extract_from)
+            self._extract(extract_from, extract_to)
         return self.records

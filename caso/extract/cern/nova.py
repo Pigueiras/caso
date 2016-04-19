@@ -86,7 +86,7 @@ class NovaExtractor(V3BaseExtractor):
 
         return self.users
 
-    def extract_for_tenant(self, tenant, _from):
+    def extract_for_tenant(self, tenant, _from, _to):
         """Extract records for a tenant from given date querying nova.
 
         This method will get information from nova.
@@ -94,6 +94,8 @@ class NovaExtractor(V3BaseExtractor):
         :param tenant: Tenant to extract records for.
         :param _from: datetime.datetime object indicating the date to
                              extract records from
+        :param to: datetime.datetime object indicating the date to
+                   extract the records to
 
         :returns: A dictionary of {"server_id": caso.record.Record"}
         """
@@ -115,7 +117,10 @@ class NovaExtractor(V3BaseExtractor):
             start = dateutil.parser.parse(servers[0].created)
             start = start.replace(tzinfo=None)
         else:
-            start = lastrun
+            start = _from
+
+        _from = _from.replace(tzinfo=None)
+        _to = _to.replace(tzinfo=None)
 
         aux = nova_client.usage.get(tenant_id, start, end)
         usages = getattr(aux, "server_usages", [])
@@ -141,13 +146,19 @@ class NovaExtractor(V3BaseExtractor):
 
             started = dateutil.parser.parse(usage["started_at"])
 
+            if started > _to:
+                # Started after the _to limit, not taken in consideration
+                del records[instance_id]
+                continue
+
             records[instance_id].start_time = int(started.strftime("%s"))
             if usage.get("ended_at", None) is not None:
                 ended = dateutil.parser.parse(usage['ended_at'])
                 records[instance_id].end_time = int(ended.strftime("%s"))
-                wall = ended - started
             else:
-                wall = now - started
+                ended = _to
+
+            wall = min(ended, _to) - max(started, _from)
 
             wall = int(wall.total_seconds())
             records[instance_id].wall_duration = wall
