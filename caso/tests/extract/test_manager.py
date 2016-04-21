@@ -16,6 +16,7 @@
 Tests for `caso.extract.manager` module.
 """
 
+import datetime
 import uuid
 
 import dateutil.parser
@@ -29,6 +30,7 @@ class TestCasoManager(base.TestCase):
     def setUp(self):
         super(TestCasoManager, self).setUp()
         manager.SUPPORTED_EXTRACTORS = {"foo": "foo.Bar"}
+        print type(manager.SUPPORTED_EXTRACTORS)
         self.flags(extractor="foo")
         self.p_extractor = mock.patch.dict('sys.modules',
                                            {'foo': mock.MagicMock()})
@@ -37,6 +39,7 @@ class TestCasoManager(base.TestCase):
 
     def tearDown(self):
         self.p_extractor.stop()
+        self.reset_flags()
 
         super(TestCasoManager, self).tearDown()
 
@@ -45,7 +48,7 @@ class TestCasoManager(base.TestCase):
 
         with mock.patch.object(self.manager.extractor,
                                "extract_for_tenant") as m:
-            self.manager._extract("1999-12-19")
+            self.manager._extract("1999-12-19", "2015-10-23")
             self.assertFalse(m.called)
         self.assertEqual({}, self.manager.records)
 
@@ -56,12 +59,17 @@ class TestCasoManager(base.TestCase):
         with mock.patch.object(self.manager.extractor,
                                "extract_for_tenant") as m:
             m.return_value = records
-            self.manager._extract("1999-12-19")
-            m.assert_called_once_with("bazonk", "1999-12-19")
+            self.manager._extract("1999-12-19", "2015-12-19")
+            m.assert_called_once_with("bazonk", "1999-12-19", "2015-12-19")
         self.assertEqual(records, self.manager.records)
 
     def test_get_records_wrong_extract_from(self):
         self.flags(extract_from="1999-12-99")
+        self.assertRaises(ValueError,
+                          self.manager.get_records)
+
+    def test_get_records_wrong_extract_to(self):
+        self.flags(extract_to="1999-12-99")
         self.assertRaises(ValueError,
                           self.manager.get_records)
 
@@ -70,17 +78,26 @@ class TestCasoManager(base.TestCase):
                           self.manager.get_records,
                           lastrun="1999-12-99")
 
-    def test_get_records_with_extract_from(self):
+    def test_get_records_with_extract_from_and_to(self):
         date = "1999-12-11"
+        end_date = "2015-12-11"
         dt = dateutil.parser.parse(date)
-        self.flags(extract_from=date)
+        parsed_end_date = dateutil.parser.parse(end_date)
+        self.flags(extract_from=date, extract_to=end_date)
+
         with mock.patch.object(self.manager, "_extract") as m:
             self.manager.get_records()
-            m.assert_called_with(dt)
+            m.assert_called_with(dt, parsed_end_date)
 
     def test_get_records_with_lastrun(self):
         date = "1999-12-11"
+
         dt = dateutil.parser.parse(date)
+        mock_now = datetime.datetime(2016, 4, 19, 15, 4, 14, 468060)
+
         with mock.patch.object(self.manager, "_extract") as m:
-            self.manager.get_records(lastrun=date)
-            m.assert_called_with(dt)
+            with mock.patch('caso.extract.manager.datetime') as MockDatetime:
+                MockDatetime.datetime.utcnow.return_value = mock_now
+
+                self.manager.get_records(lastrun=date)
+                m.assert_called_with(dt, mock_now)

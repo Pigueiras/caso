@@ -61,3 +61,7 @@ class TestCase(testtools.TestCase):
         group = kw.pop('group', None)
         for k, v in six.iteritems(kw):
             CONF.set_override(k, v, group)
+
+    def reset_flags(self):
+        """Reset flags."""
+        CONF.reset()

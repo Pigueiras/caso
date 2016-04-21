@@ -24,7 +24,7 @@ import six
 SUPPORTED_EXTRACTORS = {
     'nova': 'caso.extract.nova.OpenStackExtractor',
     'ceilometer': 'caso.extract.ceilometer.CeilometerExtractor',
-    'cern.nova': 'caso.extract.cern.nova.NovaExtractor',
+#    'cern.nova': 'caso.extract.cern.nova.NovaExtractor',
 }
 
 opts = [
@@ -63,6 +63,8 @@ LOG = log.getLogger(__name__)
 
 class Manager(object):
     def __init__(self):
+        print type(SUPPORTED_EXTRACTORS)
+        print CONF.extractor
         extractor_class = importutils.import_class(
             SUPPORTED_EXTRACTORS[CONF.extractor])
         self.extractor = extractor_class()

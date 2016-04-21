@@ -18,7 +18,7 @@ import datetime
 import operator
 
 import dateutil.parser
-import novaclient.client
+from novaclient import client
 from dateutil import tz
 from caso import record
 
@@ -26,65 +26,101 @@ from caso.extract.cern import V3BaseExtractor, CONF
 
 
 class NovaExtractor(V3BaseExtractor):
-    def __init__(self):
-        super(NovaExtractor, self).__init__()
-        self.users = None
+    def _get_novaclient(self, tenant):
+        """TODO"""
+        return client.Client(2, session=self._get_keystone_session(tenant),
+                             insecure=CONF.extractor.insecure)
 
-    def _get_servers(self, nova_client, since):
-        """
-        Fetch a list of servers.
-        :type nova_client: novaclient
-        :type since: datetime.datetime
-        """
-        # FIXME (lpigueir): Horrible implementation
-        servers = nova_client.servers.list()
-        state_changed = nova_client.servers.list(search_opts={"changes-since": since})
-        servers = set(servers).union(state_changed)
+    def _join_servers_and_usage(self, usages, changes):
+        # Complete the usages information
+        servers_usage = []
 
-        servers = sorted([s for s in servers], key=operator.attrgetter("created"))
+        for change in changes:
+            if change.id in usages:
+                complete = usages[change.id]
+                complete['user_id'] = change.user_id
+                complete['image_id'] = change.image['id']
+                servers_usage.append(complete)
 
-        return sorted(servers, key=operator.attrgetter("created"))
+        return servers_usage
 
-    def _generate_base_cloud_record(self, server, images, users, vo):
-        """
-        Generate a CloudRecord based on information fetched from nova
-        """
-        status = self.vm_status(server.status)
-        image_id = None
 
-        for image in images:
-            if image.id == server.image['id']:
-                image_id = image.metadata.get("vmcatcher_event_ad_mpuri",
-                                              None)
-                break
+    def _get_server_usage(self, nova_client, tenant_id, start, end):
+        servers = nova_client.usage.get(tenant_id, start, end).server_usages
 
-        if image_id is None:
-            image_id = server.image['id']
+        result = {}
 
-        return record.CloudRecord(server.id,
-                                  CONF.site_name,
-                                  server.name,
-                                  server.user_id,
-                                  server.tenant_id,
-                                  vo,
-                                  cloud_type="OpenStack",
-                                  status=status,
-                                  image_id=image_id,
-                                  user_dn=users.get(server.user_id, None))
+        for server in servers:
+            result[server['instance_id']] = server
 
-    def _get_conn(self, tenant):
-        client = novaclient.client.Client
-        conn = client(
-                2,
-                session=self._get_keystone_session(tenant),
-                insecure=CONF.extractor.insecure)
-        return conn
+        return result
 
-    def _get_users(self, ks_client):
-        if self.users is None:
-            self.users = self._get_keystone_users(ks_client)
 
-        return self.users
+    def _get_changed_servers(self, nova_client, tenant, since):
+        return nova_client.servers.list(
+            search_opts={"changes-since": since})
+
+    def _get_servers(self, tenant, _from, _to):
+        nova_client = self._get_novaclient(tenant)
+        keystone_client = self._get_keystone_client(tenant)
+
+        tenant_id = keystone_client.session.get_project_id()
+
+        servers_usage = self._get_server_usage(nova_client, tenant_id, _from,
+                                               _to)
+        if servers_usage:
+            # TODO: Clean this a bit
+            min_start = min(server['started_at'] for _, server in servers_usage.iteritems())
+            min_start = dateutil.parser.parse(min_start)
+
+            servers_changed = self._get_changed_servers(nova_client, tenant,
+                                                        min_start)
+
+            return self._join_servers_and_usage(servers_usage,
+                                                       servers_changed)
+        else:
+            return []
+
+    def _calculate_wall_duration(self, server):
+        seconds_in_an_hour = 3600
+        return server['hours'] * seconds_in_an_hour
+
+    def _to_unix_timestamp(self, timestamp):
+        return int(dateutil.parser.parse(timestamp).strftime("%s"))
+
+    def _generate_record(self, server, vo):
+        wall_duration = self._calculate_wall_duration(server)
+        start_time = self._to_unix_timestamp(server['started_at'])
+        if server['ended_at'] is not None:
+            end_time = self._to_unix_timestamp(server['ended_at'])
+        else:
+            end_time = None
+
+        return record.CloudRecord(
+            server['instance_id'],
+            CONF.site_name,
+            server['name'],
+            server['user_id'],
+            server['tenant_id'],
+            vo,
+            cloud_type="OpenStack",
+            status=server['state'],
+            image_id=server['image_id'],
+            user_dn=server['user_id'],
+            wall_duration=wall_duration,
+            cpu_count=server['vcpus'],
+            memory=server['memory_mb'],
+            disk=server['local_gb'],
+            start_time=start_time,
+            end_time=end_time)
+
+
+    def _generate_records(self, servers, vo):
+        records = {}
+        for server in servers:
+            records[server['instance_id']] = self._generate_record(server, vo)
+
+        return records
 
     def extract_for_tenant(self, tenant, _from, _to):
         """Extract records for a tenant from given date querying nova.
@@ -99,69 +135,8 @@ class NovaExtractor(V3BaseExtractor):
 
         :returns: A dictionary of {"server_id": caso.record.Record"}
         """
-        # Some API calls do not expect a TZ, so we have to remove the timezone
-        # from the dates. We assume that all dates coming from upstream are
-        # in UTC TZ.
-
-        now = datetime.datetime.now(tz.tzutc()).replace(tzinfo=None)
-        end = now + datetime.timedelta(days=1)
-
-        # Try and except here
-        nova_client = self._get_conn(tenant)
-        ks_client = self._get_keystone_client(tenant)
-        users = self._get_users(ks_client)
-        tenant_id = ks_client.session.get_project_id()
-        servers = self._get_servers(nova_client, since=_from)
-
-        if servers:
-            start = dateutil.parser.parse(servers[0].created)
-            start = start.replace(tzinfo=None)
-        else:
-            start = _from
-
-        _from = _from.replace(tzinfo=None)
-        _to = _to.replace(tzinfo=None)
-
-        aux = nova_client.usage.get(tenant_id, start, end)
-        usages = getattr(aux, "server_usages", [])
-
-        images = nova_client.images.list()
-        records = {}
-
         vo = self.voms_map.get(tenant)
-
-        for server in servers:
-            records[server.id] = self._generate_base_cloud_record(server,
-                                                                  images,
-                                                                  users,
-                                                                  vo)
-
-        for usage in usages:
-            if usage["instance_id"] not in records:
-                continue
-            instance_id = usage["instance_id"]
-            records[instance_id].memory = usage["memory_mb"]
-            records[instance_id].cpu_count = usage["vcpus"]
-            records[instance_id].disk = usage["local_gb"]
-
-            started = dateutil.parser.parse(usage["started_at"])
-
-            if started > _to:
-                # Started after the _to limit, not taken in consideration
-                del records[instance_id]
-                continue
-
-            records[instance_id].start_time = int(started.strftime("%s"))
-            if usage.get("ended_at", None) is not None:
-                ended = dateutil.parser.parse(usage['ended_at'])
-                records[instance_id].end_time = int(ended.strftime("%s"))
-            else:
-                ended = _to
-
-            wall = min(ended, _to) - max(started, _from)
-
-            wall = int(wall.total_seconds())
-            records[instance_id].wall_duration = wall
-            records[instance_id].cpu_duration = wall
+        servers = self._get_servers(tenant, _from, _to)
+        records = self._generate_records(servers, vo)
 
         return records
